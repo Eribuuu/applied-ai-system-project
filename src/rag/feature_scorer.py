@@ -103,7 +103,13 @@ class FeatureScorer:
         order, like the Recommender's stable sort. `mask` (bool per song)
         limits which songs are eligible.
         """
-        s = self.scores(user)
+        return self.rank(self.scores(user), n, min_score, mask)
+
+    @staticmethod
+    def rank(
+        s: np.ndarray, n: int, min_score: float = 0.0, mask: Optional[np.ndarray] = None
+    ) -> List[Tuple[int, float]]:
+        """Top n of already-computed scores; see top()."""
         eligible = s >= min_score
         if mask is not None:
             eligible &= mask

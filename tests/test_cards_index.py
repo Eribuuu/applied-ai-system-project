@@ -1,9 +1,9 @@
-import hashlib
 import json
 import re
 
 import numpy as np
 import pytest
+from conftest import FakeEmbedder
 
 from src.rag.cards import descriptors, make_card
 from src.rag.data import frame_from_songs
@@ -13,7 +13,6 @@ from src.rag.index import (
     index_is_current,
     load_index,
     make_cards,
-    normalize,
 )
 from src.recommender import load_songs
 
@@ -72,22 +71,6 @@ def test_card_has_words_not_numbers():
     card = make_card(row(energy=0.873, valence=0.12, tempo_bpm=171.4))
     assert card.startswith("Test Song by Test Artist. Genres: hip hop, pop. Sound: ")
     assert not re.search(r"\d", card)
-
-
-class FakeEmbedder:
-    """Deterministic stand-in for the model: a vector from each text's hash."""
-    name = "fake-embedder"
-
-    def embed_documents(self, texts):
-        return normalize(np.stack([self._vec(t) for t in texts]))
-
-    def embed_query(self, text):
-        return normalize(self._vec(text))
-
-    @staticmethod
-    def _vec(text):
-        seed = int(hashlib.sha256(text.encode()).hexdigest()[:8], 16)
-        return np.random.default_rng(seed).normal(size=16)
 
 
 @pytest.fixture

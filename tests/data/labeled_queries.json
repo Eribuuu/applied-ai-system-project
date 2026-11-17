@@ -1,0 +1,51 @@
+[
+  {
+    "query": "mellow songs for late-night studying",
+    "genres_any": ["study", "chill", "ambient", "piano", "sleep", "acoustic", "jazz", "classical", "new-age"],
+    "ranges": {"energy": [0, 0.5]}
+  },
+  {
+    "query": "angry heavy metal for the gym",
+    "genres_any": ["metal", "heavy-metal", "death-metal", "black-metal", "metalcore", "grindcore", "hardcore", "hard-rock", "industrial"],
+    "ranges": {"energy": [0.75, 1]}
+  },
+  {
+    "query": "happy upbeat latin dance party",
+    "genres_any": ["latin", "latino", "reggaeton", "salsa", "samba", "dancehall", "forro", "pagode", "sertanejo", "brazil", "mpb"],
+    "ranges": {"valence": [0.6, 1], "danceability": [0.6, 1]}
+  },
+  {
+    "query": "sad acoustic breakup songs",
+    "ranges": {"energy": [0, 0.5], "valence": [0, 0.4], "acousticness": [0.5, 1]}
+  },
+  {
+    "query": "soft instrumental piano for falling asleep",
+    "genres_any": ["piano", "sleep", "ambient", "classical", "new-age", "study"],
+    "ranges": {"energy": [0, 0.3]}
+  },
+  {
+    "query": "fast electronic music for running",
+    "genres_any": ["edm", "electro", "electronic", "techno", "trance", "house", "drum-and-bass", "dubstep", "hardstyle", "progressive-house", "deep-house", "breakbeat", "club", "dance", "minimal-techno", "detroit-techno", "chicago-house", "idm"],
+    "ranges": {"energy": [0.7, 1], "tempo_bpm": [120, 250]}
+  },
+  {
+    "query": "relaxing jazz for a rainy coffee shop",
+    "genres_any": ["jazz", "blues", "soul", "acoustic", "piano", "mpb"],
+    "ranges": {"energy": [0, 0.5]}
+  },
+  {
+    "query": "feel-good retro synth pop",
+    "genres_any": ["synth-pop", "pop", "disco", "power-pop", "electro", "dance"],
+    "ranges": {"valence": [0.5, 1], "energy": [0.5, 1]}
+  },
+  {
+    "query": "aggressive rap with heavy beats",
+    "genres_any": ["hip-hop"],
+    "ranges": {"energy": [0.6, 1]}
+  },
+  {
+    "query": "cheerful songs for kids to sing along",
+    "genres_any": ["children", "kids", "disney"],
+    "ranges": {"valence": [0.5, 1]}
+  }
+]
