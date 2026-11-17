@@ -139,8 +139,11 @@ class Recommender:
 
     @staticmethod
     def _normalize_genre(genre: str) -> str:
-        """Lowercase and collapse whitespace, so ' Hip  Hop' matches 'hip hop'."""
-        return " ".join(genre.lower().split())
+        """
+        Lowercase, treat hyphens as spaces, and collapse whitespace, so
+        ' Hip  Hop', 'hip-hop' and 'hip hop' all match.
+        """
+        return " ".join(genre.lower().replace("-", " ").split())
 
     @staticmethod
     def gaussian_closeness(value: float, target: float, sigma: float) -> float:

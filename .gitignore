@@ -1,0 +1,7 @@
+.venv
+__pycache__/
+.pytest_cache/
+
+# Spotify Tracks dataset (Kaggle, ~20 MB) and generated index files
+data/dataset.csv
+data/index/

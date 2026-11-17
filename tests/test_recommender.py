@@ -160,3 +160,14 @@ def test_single_genre_catalog_does_not_crash():
     assert one.genre_closeness("rock", "rock") == 1.0
     assert one.similar_genres("rock") == []
     assert Recommender([]).genre_closeness("rock", "pop") == 0.0
+
+
+def test_hyphens_match_spaces():
+    rec = Recommender([
+        make_song(1, "hip-hop", 0.7, 0.5, 0.8, 0.1, 95),
+        make_song(2, "indie-pop", 0.6, 0.6, 0.6, 0.3, 115),
+    ])
+    assert rec.genre_closeness("hip-hop", "Hip Hop") == 1.0
+    assert rec.genre_closeness("hip-hop", "hip-hop") == 1.0
+    # Typed genre not in the catalog: word overlap now sees 'indie' + 'pop'.
+    assert rec.genre_closeness("indie-pop", "pop") == 0.5
