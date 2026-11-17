@@ -69,8 +69,15 @@ def test_middle_values_add_no_extra_words():
 
 def test_card_has_words_not_numbers():
     card = make_card(row(energy=0.873, valence=0.12, tempo_bpm=171.4))
-    assert card.startswith("Test Song by Test Artist. Genres: hip hop, pop. Sound: ")
+    assert card.startswith("Test Song by Test Artist. Genres: hip hop (also: rap, hiphop), pop. Sound: ")
     assert not re.search(r"\d", card)
+
+
+def test_card_genres_carry_aliases():
+    card = make_card(row(genres=["r-n-b", "study", "jazz"]))
+    assert "r n b (also: r&b, rnb, r and b, rhythm and blues)" in card
+    assert "study (also: lofi, lo fi)" in card
+    assert "jazz," not in card and "jazz." in card  # no aliases: plain name
 
 
 @pytest.fixture

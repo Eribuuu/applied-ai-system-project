@@ -6,12 +6,17 @@ Embedding models understand words, not numeric closeness ("energy 0.35" and
 into descriptor words. A card never contains raw feature numbers; the numeric
 fit is the FeatureScorer's job.
 
+Genres carry their common aliases (genres.ALIASES), so a query saying "rap"
+finds songs filed under hip-hop.
+
 Example:
-    "Comedy by Gen Hoshino. Genres: acoustic, j pop, singer songwriter.
+    "Comedy by Gen Hoshino. Genres: acoustic, j pop (also: jpop), singer songwriter.
      Sound: moderate energy, upbeat, positive, danceable, mid-tempo."
 """
 
 from typing import Any, List, Mapping, Optional, Sequence, Tuple
+
+from .genres import ALIASES, normalize
 
 # (upper bound, words): the first bin whose bound the value is below wins.
 ENERGY_BINS: Sequence[Tuple[float, str]] = [
@@ -89,9 +94,16 @@ def descriptors(row: Mapping[str, Any]) -> List[str]:
     return words
 
 
+def genre_text(genre: str) -> str:
+    """A genre as card words, with the other names people use for it: 'hip hop (also: rap, hiphop)'."""
+    name = normalize(genre)
+    aliases = ALIASES.get(name)
+    return f"{name} (also: {', '.join(aliases)})" if aliases else name
+
+
 def make_card(row: Mapping[str, Any]) -> str:
     """The text that gets embedded for one song."""
-    genres = ", ".join(g.replace("-", " ") for g in row["genres"])
+    genres = ", ".join(genre_text(g) for g in row["genres"])
     return (
         f"{row['title']} by {row['artist']}. "
         f"Genres: {genres}. "
