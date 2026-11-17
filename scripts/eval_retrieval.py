@@ -58,7 +58,7 @@ def main() -> None:
     for label in labels:
         q = label["query"]
         dense_hits = retriever.dense(q, retriever.dense_n)
-        profile, _ = retriever.build_profile(None, dense_hits)
+        profile, _ = retriever.build_profile(None, dense_hits, retriever.query_genre(q)[0])
         modes = {
             "dense": [i for i, _ in dense_hits[: args.k]],
             "feature": [i for i, _ in FeatureScorer.rank(retriever.scorer.scores(profile), args.k)],

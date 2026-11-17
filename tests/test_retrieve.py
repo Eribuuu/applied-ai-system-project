@@ -103,6 +103,24 @@ def test_mask_limits_results(retriever):
     assert result.hits and all(h.song.genre == "lofi" for h in result.hits)
 
 
+def test_query_genre_sets_profile_genre(retriever):
+    result = retriever.retrieve(query="some calm lofi please", min_score=0.0)
+    assert result.query_genres == ["lofi"]
+    assert result.profile.favorite_genre == "lofi"
+    assert result.profile_source == "pseudo-relevance + query genre"
+
+
+def test_two_named_genres_set_no_genre(retriever):
+    result = retriever.retrieve(query="jazz or blues", min_score=0.0)
+    assert result.query_genres == ["jazz", "blues"]
+    assert result.profile_source == "pseudo-relevance"
+
+
+def test_flag_genre_beats_query_genre_and_resolves_alias(retriever):
+    result = retriever.retrieve(query="lofi beats", flags=profile(favorite_genre="rap"), min_score=0.0)
+    assert result.profile.favorite_genre == "hip hop"  # songs.csv's name for it
+
+
 def test_text_query_needs_an_index():
     rec = Recommender(load_songs("data/songs.csv"))
     flags_only = HybridRetriever(FeatureScorer(rec))
