@@ -44,9 +44,10 @@ class FeatureScorer:
 
         # Flatten song -> genres into parallel (song index, genre code) arrays, so a
         # genre target is scored once per distinct genre, then spread to songs.
+        self.song_genres: List[List[str]] = [list(gs) for gs in genres]
         vocab: Dict[str, int] = {}
         song_idx, genre_code = [], []
-        for i, gs in enumerate(genres):
+        for i, gs in enumerate(self.song_genres):
             for g in gs:
                 code = vocab.setdefault(Recommender._normalize_genre(g), len(vocab))
                 song_idx.append(i)
@@ -61,6 +62,14 @@ class FeatureScorer:
         best = np.zeros(self.n)
         np.maximum.at(best, self._song_idx, per_genre[self._genre_code])
         return best
+
+    def matched_genre(self, i: int, target: str) -> str:
+        """Which of song i's genres best matches the target (the one genre_closeness used); exact names win ties."""
+        t = Recommender._normalize_genre(target)
+        return max(
+            self.song_genres[i],
+            key=lambda g: (self.rec.genre_closeness(g, target), Recommender._normalize_genre(g) == t),
+        )
 
     def closeness(self, user: UserProfile) -> Dict[str, np.ndarray]:
         """

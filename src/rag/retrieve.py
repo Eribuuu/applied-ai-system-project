@@ -209,6 +209,10 @@ class HybridRetriever:
             if feature_scores[i] < min_score:
                 continue
             song = self.rec.songs[i]
+            # A multi-genre song is scored on its best-matching genre; name that one in the reasons.
+            reason_song = song
+            if profile.favorite_genre:
+                reason_song = replace(song, genre=self.scorer.matched_genre(i, profile.favorite_genre))
             d_rank, d_sim = dense_pos.get(i, (None, None))
             hits.append(Hit(
                 index=i,
@@ -218,7 +222,7 @@ class HybridRetriever:
                 feature_rank=feature_pos.get(i),
                 dense_rank=d_rank,
                 dense_sim=d_sim,
-                reasons=self.rec.reasons(profile, song, self.scorer.song_closeness(closeness, i)),
+                reasons=self.rec.reasons(profile, reason_song, self.scorer.song_closeness(closeness, i)),
             ))
             if len(hits) == k:
                 break

@@ -70,6 +70,20 @@ def test_multi_genre_song_gets_best_genre_match():
     assert g[0] == 1.0  # filed under j-pop as its second genre
     assert g[1] == 1.0
     assert g[2] < 1.0
+    assert scorer.matched_genre(0, "j-pop") == "j-pop"
+    assert scorer.matched_genre(0, "acoustic") == "acoustic"
+
+
+def test_reasons_name_the_matched_genre():
+    from src.rag.retrieve import HybridRetriever
+
+    songs = [make_song(0, "electro", 0.9), make_song(1, "pop", 0.4), make_song(2, "hip-hop", 0.6)]
+    scorer = FeatureScorer(Recommender(songs), genres=[["electro", "hip-hop"], ["pop"], ["hip-hop"]])
+    hits = HybridRetriever(scorer).retrieve(flags=UserProfile("rap", 0.9, None, None, None, None), k=3,
+                                            min_score=0.0).hits
+    electro = next(h for h in hits if h.index == 0)
+    assert "same genre (hip-hop)" in electro.reasons
+    assert electro.song.genre == "electro"  # the Song itself is unchanged
 
 
 def test_genres_must_align_with_songs(small):
