@@ -1,82 +1,113 @@
-%% Music Recommender + RAG: proof of concept
-%% Extends the existing content-based Recommender (src/recommender.py)
-%% Solid arrows = data flow. Dotted arrows = reads from cache / testing / human review.
+%% Music Recommender + RAG: system architecture (as built)
+%% Read top to bottom: INPUT -> PROCESS (retrieve, then generate) -> OUTPUT.
+%% Solid arrows = data flow at query time.
+%% Dashed arrows = offline data, testing, evaluation, and human review.
 flowchart TB
 
     %% ===================== People =====================
-    LISTENER(["👤 Listener"])
-    DEV(["🧑‍💻 Developer"])
+    USER(["👤 Listener"])
+    DEV(["🧑‍💻 Developer / reviewer"])
 
     %% ===================== Offline: build once =====================
-    subgraph OFFLINE["① Build index once · python -m src.rag.index"]
-        RAW[("Spotify Tracks CSV<br/>~114k tracks")]
-        PREP["Load + dedupe track_id<br/>→ Song objects"]
-        CARDS["Song cards<br/>features → words<br/>'rock — high-energy, dark, fast'"]
-        EMBED["Embed cards<br/>fastembed bge-small"]
-        CACHE[("Cache · data/index/<br/>songs.parquet · features.npy<br/>embeddings.npy")]
-        RAW --> PREP --> CARDS --> EMBED --> CACHE
-        PREP --> CACHE
+    subgraph OFFLINE["Offline indexing (run once): python -m src.rag.data, python -m src.rag.index"]
+        direction LR
+        RAW[("Spotify Tracks CSV<br/>114k rows")]
+        PREP["Data prep: data.py<br/>dedupe → 81k songs<br/>merge genres"]
+        CARDS["Song cards: cards.py<br/>features → words<br/>+ genre aliases"]
+        EMBED["Embedder: index.py<br/>bge-small (fastembed)"]
+        STORE[("data/index/<br/>songs.parquet<br/>embeddings.npy<br/>meta.json")]
+        RAW --> PREP --> CARDS --> EMBED --> STORE
+        PREP --> STORE
     end
 
-    %% ===================== Online: one query =====================
-    subgraph CLI["② CLI · src/main.py"]
-        QUERY["Query<br/>'mellow songs for late-night studying'<br/>+ optional --energy, --genre … flags"]
-        PRINT["Print top-k songs<br/>+ explanation"]
+    %% ===================== INPUT =====================
+    subgraph INPUT["1 · INPUT: CLI (main.py, interactive.py)"]
+        MENU["Interactive menus<br/>or --query / flags"]
+        TEXT["Description<br/>'mellow acoustic folk'"]
+        FLAGS["Settings chosen as words<br/>genre · energy · mood · tempo …"]
+        MENU --> TEXT
+        MENU --> FLAGS
     end
 
-    subgraph RETRIEVE["③ Hybrid retrieval"]
-        DENSE["Dense search<br/>embed query → cosine → top ~300"]
-        PROFILE["UserProfile<br/>from flags, else mean features<br/>of top ~20 dense hits"]
-        SCORER["Existing Recommender scoring<br/>Gaussian closeness × WEIGHTS<br/>(vectorized with NumPy)"]
-        RRF["RRF fusion<br/>+ MIN_SCORE → top-k"]
-        DENSE --> PROFILE --> SCORER
-        DENSE --> RRF
-        SCORER --> RRF
+    %% ===================== PROCESS: RETRIEVER =====================
+    subgraph RETRIEVER["2 · PROCESS: Hybrid retriever (retrieve.py), no LLM"]
+        GENRE["Genre detection: genres.py<br/>'rap' → hip-hop"]
+        DENSE["Dense search<br/>query vs. song cards<br/>top 300"]
+        PROFILE["Profile builder<br/>flags > query genre ><br/>avg of top-20 dense hits"]
+        SCORER["Feature scorer: feature_scorer.py<br/>original Recommender math,<br/>vectorized"]
+        FUSE["RRF fusion<br/>+ MIN_SCORE → top k"]
+        GENRE --> PROFILE
+        DENSE -->|"top 20"| PROFILE
+        PROFILE --> SCORER
+        DENSE -->|"ranking"| FUSE
+        SCORER -->|"ranking"| FUSE
     end
 
-    subgraph GEN["④ Generation"]
-        CTX["Context<br/>query + top-k songs + reasons()"]
-        LLM{{"Small local LLM<br/>explain the picks"}}
-        GUARD{"Guardrail<br/>only retrieved songs?"}
-        FALLBACK["Fallback<br/>template reasons()"]
+    %% ===================== PROCESS: GENERATOR =====================
+    subgraph GENERATOR["3 · PROCESS: Explanation generator (generate.py)"]
+        CTX["Context builder<br/>request + facts per song<br/>'energy 0.31 (target 0.30)'"]
+        LLM{{"Local LLM<br/>qwen2.5:3b via Ollama<br/>JSON-schema reply"}}
+        GUARD{"Guardrail<br/>valid JSON? real song ids?<br/>numbers from context?<br/>every song explained?"}
+        FALLBACK["Template fallback<br/>Recommender reasons()"]
         CTX --> LLM --> GUARD
-        GUARD -->|"fail"| FALLBACK
+        GUARD -->|"fails / Ollama down"| FALLBACK
     end
 
-    %% ----- data flow -----
-    LISTENER -->|"runs CLI"| QUERY
-    QUERY -->|"text"| DENSE
-    QUERY -->|"flags"| PROFILE
-    CACHE -.-> DENSE
-    CACHE -.-> SCORER
-    RRF -->|"top-k + reasons"| CTX
-    GUARD -->|"pass"| PRINT
-    FALLBACK --> PRINT
-    PRINT -->|"reads"| LISTENER
-
-    %% ===================== Testing =====================
-    subgraph QA["Testing"]
-        PARITY["Parity test<br/>vectorized scorer == Recommender<br/>on songs.csv"]
-        UNIT["Unit tests<br/>cards · RRF · guardrail (mocked LLM)"]
-        EVAL["Retrieval check<br/>~10 labeled queries → hit-rate"]
+    %% ===================== OUTPUT =====================
+    subgraph OUTPUT["4 · OUTPUT"]
+        RESULTS["Ranked songs + match scores<br/>+ explanation per song<br/>(LLM text or template)"]
+        DETAILS["'Show details'<br/>profile used, ranks,<br/>guardrail notes"]
     end
-    PARITY -.->|"checks"| SCORER
-    UNIT -.->|"checks"| RRF
-    UNIT -.->|"checks"| GUARD
-    EVAL -.->|"runs"| RETRIEVE
 
-    %% ----- human in the loop -----
-    DEV -.->|"downloads"| RAW
-    DEV -.->|"labels queries,<br/>reads hit-rate"| EVAL
-    DEV -.->|"spot-checks explanations"| PRINT
+    %% ----- query-time data flow -----
+    USER -->|"chooses / types"| MENU
+    TEXT --> GENRE
+    TEXT --> DENSE
+    FLAGS -->|"override"| PROFILE
+    STORE -.->|"card vectors"| DENSE
+    STORE -.->|"audio features"| SCORER
+    FUSE -->|"top k + evidence"| CTX
+    TEXT -->|"original request"| CTX
+    GUARD -->|"passes"| RESULTS
+    FALLBACK --> RESULTS
+    FUSE -.-> DETAILS
+    GUARD -.->|"notes"| DETAILS
+    RESULTS -->|"reads, refines,<br/>asks for more"| USER
+    DETAILS -.-> USER
+
+    %% ===================== TESTING & EVALUATION =====================
+    subgraph QA["Testing & evaluation"]
+        PYTEST["pytest: 137 tests<br/>data · cards · scorer parity ·<br/>RRF · genres · guardrail (fake LLM) ·<br/>CLI + menus (scripted input)"]
+        LABELS[("labeled_queries.json<br/>10 hand-labeled queries")]
+        EVALR["Retrieval evaluator<br/>eval_retrieval.py<br/>precision@10: dense / feature / hybrid"]
+        EVALL["LLM evaluator<br/>compare_llms.py<br/>JSON · ids · coverage ·<br/>invented numbers · speed"]
+        LIVE["Live LLM test<br/>RUN_OLLAMA_TESTS=1"]
+        LABELS -.-> EVALR
+    end
+    PYTEST -.->|"checks"| SCORER
+    PYTEST -.->|"checks"| FUSE
+    PYTEST -.->|"checks"| GUARD
+    PYTEST -.->|"checks"| MENU
+    EVALR -.->|"runs"| RETRIEVER
+    EVALL -.->|"runs 4 models"| LLM
+    LIVE -.->|"checks"| GUARD
+
+    %% ===================== Human in the loop =====================
+    DEV -.->|"writes relevance criteria"| LABELS
+    DEV -.->|"reads scores, tunes genres/aliases<br/>(0.63 → 0.75)"| EVALR
+    DEV -.->|"reads answers, picked qwen2.5:3b"| EVALL
+    DEV -.->|"spot-checks explanations<br/>for false claims"| RESULTS
+    USER -.->|"judges fit via 'Show details'"| DETAILS
 
     %% ===================== Styling =====================
     classDef human fill:#fde68a,stroke:#b45309,color:#111
     classDef store fill:#e0e7ff,stroke:#4338ca,color:#111
     classDef llm fill:#fbcfe8,stroke:#be185d,color:#111
     classDef test fill:#dcfce7,stroke:#15803d,color:#111
+    classDef io fill:#f1f5f9,stroke:#475569,color:#111
 
-    class LISTENER,DEV human
-    class RAW,CACHE store
+    class USER,DEV human
+    class RAW,STORE,LABELS store
     class LLM,GUARD,FALLBACK llm
-    class PARITY,UNIT,EVAL test
+    class PYTEST,EVALR,EVALL,LIVE test
+    class MENU,TEXT,FLAGS,RESULTS,DETAILS io

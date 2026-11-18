@@ -1,183 +1,64 @@
-# 🎧 Model Card: Music Recommender Simulation
+# 🎧 Model Card: Music Recommender + RAG
 
-## 1. Model Name  
-
-**WaveSense 1.0** 
+**What it is:** a music recommender that takes a plain-language request, retrieves songs from an 81,000-track Spotify catalog with hybrid search (embeddings + the original feature scorer, fused with RRF), and has a local LLM (`qwen2.5:3b` via Ollama) explain the picks. A guardrail checks every explanation and falls back to template reasons. Details are in the [README](README.md).
 
 ---
 
-## 2. Intended Use  
-
-Describe what your recommender is designed to do and who it is for. 
-
-Prompts:  
-
-- What kind of recommendations does it generate  
-- What assumptions does it make about the user  
-- Is this for real users or classroom exploration 
-
-Currently this recommendation system is solely based on the contents of the songs ingested and recommends songs that fit closely to what parameters are defined by the user, these parameters are desired song metrics. The assumptions this recommender system takes about the user is that the user knows exactly what kind of songs they are looking for and what metrics that they are wanting in the songs (most users do not know what metrics are in songs and also would like to explore songs similar to their tastes, not exactly). This currently is not for real users based on how the system recommends songs and takes input to choose the songs to recommend, this is purely classroom exploration. To be used by actual users I would need to add a better way to set the intial values of the user profile that isn't direct numbers and values and maybe based on a song that they like already and extract values from that.
-
----
-
-## 3. How the Model Works  
-
-Explain your scoring approach in simple language.  
-
-Prompts:  
-
-- What features of each song are used (genre, energy, mood, etc.)  
-- What user preferences are considered  
-- How does the model turn those into a score  
-- What changes did you make from the starter logic  
-
-Avoid code here. Pretend you are explaining the idea to a friend who does not program.
-
-Each song has a genre, a mood, and five numbers: energy, valence (how happy or dark it sounds), danceability, tempo, and acousticness. The user says what they want for each of these, or leaves one blank to ignore it.
-
-For every song, the system checks how close it is to what the user wants:
-- **Numbers:** a perfect match gets full credit, and the credit drops off smoothly the further away the song is. Being a little off barely matters; being way off matters a lot.
-- **Genre:** full credit for the same genre, half credit for a partial match like "indie pop" vs "pop".
-- **Mood:** full credit for the same mood, half credit for a related mood (like "relaxed" when you asked for "chill").
-
-Each check is then weighted by how much it matters. Mood, energy and valence count the most, genre counts half as much, and danceability, tempo and acousticness count the least. The weighted average becomes the song's score from 0 to 1. The songs are sorted by score, and the top 5 are shown with a short explanation of why each one scored the way it did.
-
-Compared to the starter, I:
-- added valence, tempo and smooth danceability/acousticness scoring (the starter only had a yes/no "likes acoustic" setting and a small danceability bonus),
-- replaced the exact genre/mood matches with partial credit for related ones,
-- moved mood above genre in importance (the starter weighted genre highest),
-- turned the score into a 0–1 average so a preference can be left blank,
-- made the explanations list every feature, closest match first, with how far off each one is.
-
----
-
-## 4. Data  
-
-Describe the dataset the model uses.  
-
-Prompts:  
-
-- How many songs are in the catalog  
-- What genres or moods are represented  
-- Did you add or remove data  
-- Are there parts of musical taste missing in the dataset  
-
-- The catalog has **20 songs** in `data/songs.csv`. The starter came with 10, and I added 10 more to cover more styles.
-- There are **17 genres** (pop, lofi, rock, jazz, edm, metal, hip hop, classical, country, reggaeton, and more) and **16 moods** (happy, chill, intense, sad, angry, romantic, and more).
-- Coverage is uneven: lofi has 3 songs, pop has 2, and every other genre has just 1.
-- Missing: lyrics, language, artist popularity, release year, and many non-Western genres. Some combinations, like a high-energy sad song, don't exist in the data at all.
-
----
-
-## 5. Strengths  
-
-Where does your system seem to work well  
-
-Prompts:  
-
-- User types for which it gives reasonable results  
-- Any patterns you think your scoring captures correctly  
-- Cases where the recommendations matched your intuition  
-
-- **Users with clear, common tastes get good results.** Chill Lofi got all three lofi songs on top (0.87 to 0.99), followed by other calm, acoustic songs like ambient and jazz.
-- **Related moods help.** "Focused" and "relaxed" songs still showed up for a "chill" listener instead of being thrown out.
-- **Opposite profiles get opposite results.** High-Energy Pop and Chill Lofi share no songs, which matches what you'd expect.
-- **The explanations are easy to check.** Every recommendation says which features matched and which were off, so it's clear why a song ranked where it did.
-
----
-
-## 6. Limitations and Bias 
-
-Where the system struggles or behaves unfairly. 
-
-Prompts:  
-
-- Features it does not consider  
-- Genres or moods that are underrepresented  
-- Cases where the system overfits to one preference  
-- Ways the scoring might unintentionally favor some users  
-
-The dataset is one of the biggest limitations at the current moment. Its very small with only 20 songs in the set and its also synthetic and not accutare or representative of real life.
+## Limitations and biases
 
 **Data**
-- 15 of 17 genres have only one song, so niche listeners get one good match and then filler (Deep Intense Rock drops from 0.96 to 0.56 after #1).
-- Some tastes can't be met at all: no song is both high-energy and sad.
-- Genres lean Western; a K-pop or Afrobeats fan gets zero genre credit on every song.
+- **Genre labels are Spotify's, not listeners'.** There is no "lofi" genre, and Disney sits right next to piano because both are quiet and acoustic. The system inherits these choices.
+- **Uneven coverage.** Each of the 114 genres started at about 1,000 tracks, but after deduplication some have far fewer, and there is no mood, era, lyric or language data at all.
+- **Deduplication favors popular versions.** When the same song appears more than once, the most popular copy is kept, which nudges results toward mainstream releases.
 
-**Scoring**
-- Mood, energy and valence carry about 73% of the weight, so one exact mood match can beat a song that fits every numeric target.
-- Genres only match on shared words, so "rock" vs "metal" scores 0 and a pop song beat a metal song for a rock fan.
-- Mood families are hand-picked by me, and "romantic" never gets partial credit.
+**Retrieval**
+- **English-only embedding model.** `bge-small-en` handles English queries well and other languages poorly, even though the catalog has Turkish, Indian, Brazilian and K-pop music.
+- **Title words can outweigh meaning.** "angry heavy metal for the gym" once ranked a comedy track called *Gym* in second place.
+- **Descriptor words use hard cut-offs.** Energy 0.59 is "moderate energy" and 0.60 is "energetic", so near-identical songs can be described differently.
+- **Genre centroids only see audio features.** By those features hip-hop sits closest to j-dance and dance, so a hip-hop request gives those genres partial credit.
+- **No query understanding.** Negation ("nothing acoustic"), numbers in words ("120 bpm") and requests naming two genres are not understood.
 
-**Output**
-- It always returns k songs, even weak matches (0.29 for the rock fan), with no "no good match" signal.
-- Ties keep CSV order, so songs earlier in the file win ties.
-- No diversity or exploration: the same artist can repeat, and users never get pushed outside their stated taste.
+**Generation**
+- **The guardrail checks IDs and numbers, not every claim.** qwen once said "all songs are hip-hop" when one was electronic, and that got through.
+- **Explanations are repetitive.** Sometimes all five songs get the same sentence.
 
----
-
-## 7. Evaluation  
-
-How you checked whether the recommender behaved as expected. 
-
-Prompts:  
-
-- Which user profiles you tested  
-- What you looked for in the recommendations  
-- What surprised you  
-- Any simple tests or comparisons you ran  
-
-No need for numeric metrics unless you created some.
-
-**Profiles tested**
-- **High-Energy Pop:** pop, intense, energy 0.92, danceability 0.88, 130 BPM, low acousticness.
-- **Chill Lofi:** lofi, chill, energy 0.38, 76 BPM, high acousticness.
-- **Deep Intense Rock:** rock, intense, energy 0.92, darker valence (0.40), 150 BPM.
-- I also ran edge-case profiles (conflicting preferences, unknown genres, out-of-range values, messy text, no preferences) and "tug of war" profiles that set one weight against another (results are in the README).
-
-For each profile I checked whether the top songs matched the genre and mood I asked for, whether the songs after that still felt close, and whether the "Because" lines explained the score.
-
-**Comparing the profiles**
-- **High-Energy Pop vs Chill Lofi:** these lists don't share a single song. Pop picks loud, danceable, electronic tracks (Gym Hero, Laser Cathedral), and lofi shifts to quiet, slow, acoustic ones (Library Rain, Spacewalk Thoughts). That makes sense because the two profiles sit at opposite ends of energy, tempo and acousticness.
-- **High-Energy Pop vs Deep Intense Rock:** these overlap the most. Gym Hero and Storm Runner are in both top 3s because both profiles want "intense" mood and 0.92 energy. The difference is that pop ranks Gym Hero first and rock ranks Storm Runner first, and the rest of the pop list stays bright (Sunrise City, Fuego Lento) while rock pulls in darker songs (Iron Furnace, Night Drive Loop). That fits: genre and valence are the only real differences between the two profiles.
-- **Chill Lofi vs Deep Intense Rock:** these are complete opposites with no overlap. Lofi stays at 0.66 or higher for all five songs, but rock falls from 0.96 to 0.29. Both profiles have specific targets, so the gap comes from the dataset: there are three lofi songs plus several calm neighbors (ambient, jazz), while rock has one song and few intense neighbors.
-
-**What surprised me**
-- Gym Hero scored a perfect 1.00 for High-Energy Pop. My targets ended up almost identical to that one song, so the profile was really testing whether the system could find Gym Hero.
-- For the rock fan, Gym Hero (pop) beat Iron Furnace (metal) even though metal sounds closer to rock. An exact "intense" mood match outweighed a similar "angry" mood, and "rock" vs "metal" gets no genre credit.
-- Testing messy input (" Happy " with spaces) found a real bug: mood matching didn't ignore extra spaces. I fixed it.
-- In the weight tests, a single exact mood match beat a song that matched energy almost perfectly, which showed how much mood controls the ranking.
+**Evaluation**
+- **The eval is small and subjective.** It uses 10 queries whose relevance criteria I wrote, so the 0.75 score reflects my idea of a good match.
 
 ---
 
-## 8. Future Work  
+## Could it be misused, and how would I prevent that?
 
-Ideas for how you would improve the model next.  
+The risk is low: the system only recommends existing songs and explains them. Some misuse is still possible:
 
-Prompts:  
-
-- Additional features or preferences  
-- Better ways to explain recommendations  
-- Improving diversity among the top results  
-- Handling more complex user tastes  
-
-- **Easier user input:** build the profile from a song the user already likes instead of asking for numbers.
-- **Bigger, real dataset:** more songs per genre so niche listeners get more than one good match.
-- **Smarter genre matching:** treat related genres (rock and metal, hip hop and r&b) as close instead of scoring them 0.
-- **Diversity:** limit songs per artist and mix in a few exploratory picks outside the user's usual taste.
-- **"No good match" signal:** stop recommending songs below a minimum score instead of always returning 5.
-- **Multiple tastes:** let a user have more than one profile, like "workout" and "studying".
+| Risk | What's in place | What I'd add |
+|---|---|---|
+| **The LLM inventing songs or facts** | The LLM never picks songs. The guardrail rejects unknown song IDs and numbers that aren't in the context, and falls back to template text. | A check that genre claims match the song's real genres |
+| **Prompt injection** through a query or a song title ("ignore your rules…") | Output is forced into a fixed JSON format, and only text that passes the guardrail is shown. A bad reply can only produce template text. | Strip instruction-like text from titles before building the context |
+| **Explicit songs reaching children** ("cheerful songs for kids") | Nothing yet. The `explicit` flag is loaded but not used for filtering. | A "no explicit lyrics" option, on by default for kid-related queries |
+| **Rigging rankings** (e.g. editing weights or aliases to push certain artists) | All weights and aliases are in plain code and covered by tests | Log changes to scoring settings; show "Show details" by default |
+| **Privacy, if switched to a cloud LLM** | The local LLM keeps everything on the machine | Warn the user and document what data is sent if a hosted API is used |
 
 ---
 
-## 9. Personal Reflection  
+## What surprised me while testing reliability
 
-A few sentences about your experience.  
+- **My first explanation of a problem was wrong.** The piano query dropped from 1.0 to 0.8, so I assumed the genre weight was too strong and lowered it. Every query got worse, including piano. The real cause was that the label didn't count calm Disney instrumentals as relevant, even though the genre centroids rank Disney closest to piano.
+- **Small models misread numbers.** One model turned "tempo within 14 BPM of target" into "a target tempo of 14 BPM". The number was real, so my check passed it, but the meaning was wrong. Rewording the facts as "tempo 152 BPM (target 150)" fixed that kind of mistake.
+- **Valid output doesn't mean useful output.** All four LLMs I compared returned valid JSON with real song IDs every time. The differences were behaviour: two skipped songs without saying so, and one described weak matches as great fits.
+- **An improvement didn't show up in the score.** Adding genre aliases to the song cards put 9 hip-hop songs in the top 10 for "rap", but the eval score didn't move, because the eval's rap query was already fixed by genre detection.
+- **The guardrail never had to reject anything in live runs.** All 15 live explanations passed, yet one of them still contained a false genre claim. Passing the guardrail is not the same as being correct.
 
-Prompts:  
+---
 
-- What you learned about recommender systems  
-- Something unexpected or interesting you discovered  
-- How this changed the way you think about music recommendation apps  
+## Collaboration with AI
 
-I learned that a recommender is really just a set of choices about what matters: which features to compare and how much each one is weighted. Small choices have big effects. Giving mood a high weight meant a single mood label could outrank a song that fit everything else, and a small dataset meant some listeners were served much better than others for reasons that had nothing to do with their taste. It surprised me how much testing odd profiles revealed, including a real bug with extra spaces in the input. It made me realize that apps like Spotify have to balance giving people what they asked for with helping them find new music, and that the data they're built on shapes who they work well for.
+I built this with Claude Code as a coding assistant. I worked one step at a time: it proposed a plan, implemented one step, and ran the tests, and I reviewed each step before moving on. I made the design calls: the dataset, local vs. cloud LLM, menu style, and when to stop tuning.
+
+**A suggestion I accepted:** when the rap query scored 0 out of 10, Claude found that the real problem was vocabulary, not the scoring. The word "rap" never maps to Spotify's "hip-hop", so the existing genre centroids never got used. It suggested an alias table plus detecting a single genre named in the query. I accepted it because it was small, testable and needed no index rebuild. It raised hybrid precision from 0.63 to 0.75 and took the rap query from 0.0 to 0.5.
+
+**Suggestions I didn't accept as written:**
+- **The first architecture was over-engineered for a proof of concept.** Claude's first plan had three retrievers (adding BM25), diversity reranking, genre knowledge notes, a Streamlit app, run logs and an LLM query parser. I scoped it down to dense search plus the existing scorer, a CLI and one LLM call. That was enough to show RAG working and keep it testable, and the rest went under future work.
+- **I changed the LLM provider.** The plan used the Claude API for explanations. I switched to a small local model because I wanted it free, offline and private. Claude then compared four local models, and I chose `qwen2.5:3b` from the results.
+- **I chose simpler menus.** Claude recommended arrow-key menus using an extra library. I chose plain numbered menus so the app works in any terminal with no new dependency.
+- **A flawed suggestion, caught by measurement.** Claude's fix for the piano query (lower the genre weight) was based on a wrong guess about the cause. Because we ran the eval at four weights before keeping it, the regression was obvious, the change was reverted, and the real cause turned out to be the label.
