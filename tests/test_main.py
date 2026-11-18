@@ -43,8 +43,8 @@ def test_empty_query_without_flags_is_an_error():
         main(["--query", "   "])
 
 
-def test_no_arguments_runs_the_original_demo(capsys):
-    assert main([]) == 0
+def test_demo_flag_runs_the_original_demo(capsys):
+    assert main(["--demo"]) == 0
     out = capsys.readouterr().out
     assert "Loaded Songs: 20" in out and "Profile: Deep Intense Rock" in out
 

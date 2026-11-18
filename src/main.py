@@ -1,11 +1,14 @@
 """
 Command line runner for the Music Recommender Simulation.
 
-With no arguments it runs the original demo: the three PROFILES below against
-the 20-song data/songs.csv.
+With no arguments it starts interactive mode: numbered menus for describing
+what you want and picking genre/sound settings (see src/interactive.py).
+
+--demo runs the original demo: the three PROFILES below against the 20-song
+data/songs.csv.
 
 With --query and/or feature flags it searches the full Spotify catalog with
-hybrid retrieval (src/rag) and has a local LLM explain the picks:
+hybrid retrieval (src/rag) and has a local LLM explain the picks, for scripting:
 
     python src/main.py --query "mellow songs for late-night studying"
     python src/main.py --query "rap for the gym" --energy 0.9
@@ -121,9 +124,10 @@ def positive(text: str) -> float:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Music recommender. No arguments: the original 20-song demo. "
-                    "With --query and/or feature flags: hybrid search over the Spotify catalog.",
+        description="Music recommender. No arguments: interactive menus. "
+                    "With --query and/or feature flags: one search over the Spotify catalog.",
     )
+    p.add_argument("--demo", action="store_true", help="run the original 20-song demo and exit")
     p.add_argument("--query", "-q", help='what you want to hear, e.g. "mellow songs for late-night studying"')
     p.add_argument("-k", type=int, default=5, help="number of songs (default 5)")
     target = p.add_argument_group("feature targets (each optional; set ones override what the query implies)")
@@ -273,9 +277,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"{len(genres)} genres:\n" + ", ".join(genres))
         print("Also accepted: rap, r&b, lofi, kpop, dnb, bossa nova, and other common aliases.")
         return 0
-    if args.query is None and flags_from_args(args) is None:
+    if args.demo:
         run_demo()
         return 0
+    if args.query is None and flags_from_args(args) is None:
+        try:
+            from .interactive import run_interactive
+        except ImportError:
+            from interactive import run_interactive
+        return run_interactive()
     if args.query is not None and not args.query.strip() and flags_from_args(args) is None:
         build_parser().error("--query is empty; give some words or a feature flag")
     return run_query(args)
